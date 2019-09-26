@@ -1,9 +1,10 @@
 # This Python file uses the following encoding: utf-8
 import sys
-from PySide2.QtWidgets import QApplication, QMainWindow
+from PySide2.QtWidgets import QApplication
 from PySide2.QtQuick import QQuickView
 from PySide2.QtCore import QUrl
 
+'''
 class CupPong(QMainWindow):
     def __init__(self):
         QMainWindow.__init__(self)
@@ -11,6 +12,7 @@ class CupPong(QMainWindow):
 
     def init_ui(self):
         self.resize(480, 320)
+'''
 
 if __name__ == "__main__":
     app = QApplication([])
@@ -19,7 +21,9 @@ if __name__ == "__main__":
 
     view = QQuickView()
     view.setSource(QUrl('main.qml'))
-    view.setResizeMode(QQuickView.SizeRootObjectToView)
+    view.setResizeMode(QQuickView.SizeViewToRootObject)
     view.show()
+
+
 
     sys.exit(app.exec_())
