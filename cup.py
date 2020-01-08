@@ -1,13 +1,24 @@
 import logging
 import ctypes
+from retry import retry
 
-logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+class DataPacket(ctypes.Structure):
+    _fields_ = [("header", ctypes.c_uint8),
+                ("count", ctypes.c_uint8),
+                ("adc", ctypes.c_uint16),
+                ("ball_detected", ctypes.c_uint8)]
+
 class Colour(ctypes.Structure):
-    _fields_ = [("red", ctypes.c_ubyte),
-                ("green", ctypes.c_ubyte),
-                ("blue", ctypes.c_ubyte)]
+    _fields_ = [("red", ctypes.c_uint8),
+                ("green", ctypes.c_uint8),
+                ("blue", ctypes.c_uint8)]
+
+    def __init__(self, red=0, green=0, blue=0):
+        self.red = red
+        self.green = green
+        self.blue = blue
 
 class ArgColour(Colour):
     def __init__(self, value):
@@ -63,7 +74,8 @@ class Command(object):
         return "%s(%s)" % (self.name, ", ".join(argstrs))
 
 _commands = [
-    Command(0x00, "SET_COLOUR", ("colour", ArgColour)),
+    Command(0x74, "SET_COLOUR", ("colour", ArgColour)),
+    Command(0x01, "SET_COLOUR_MASK", ("mask", ctypes.c_uint8), ("colour", ArgColour)),
 ]
 
 class Cup(object):
@@ -76,18 +88,28 @@ class Cup(object):
             self._wrap_command(cmd)
         logger.debug('Created cup at address 0x%2x', slave_address)
 
+    def __hash__(self):
+        return self.slave_address
+
+    def __eq__(self, other):
+        return self.slave_address == other.slave_address
+
+    def __ne__(self, other):
+        return not(self == other)
+
+    def __str__(self):
+        return "Cup 0x%2x" % self.slave_address
+
     def _wrap_command(self, cmd):
         def call_cmd(bus, *args, **kwargs):
             cmdstruct = cmd(self, *args, **kwargs)
             b = cmdstruct.to_bytes()
+            logger.debug('Writing %s to address 0x%2x', b, self.slave_address)
             bus.write_i2c_block_data(self.slave_address, 0, b)
 
         setattr(self, cmd.name, call_cmd)
 
-    def check_ball_detected(self, bus):
-        b = bus.read_byte_data(self.slave_address, 0)
-        print (b)
-        if b != 0:
-            logger.debug('Ball detected on cup at address 0x%2x', self.slave_address)
-            return True
-        return False
+    @retry(OSError, tries=3, delay=0.5, logger=logger)
+    def get_status(self, bus):
+        data_packet = bus.read_ctypes_struct(self.slave_address, DataPacket)
+        return data_packet
